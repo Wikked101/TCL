@@ -1,0 +1,55 @@
+#########################################################################################
+# Name                  m00nie::youtube
+# Description           Uses youtube v3 API to search and return videos
+# Version               1.0
+# Website               https://www.m00nie.com
+# Notes                 Grab your own key @ https://developers.google.com/youtube/v3/   
+#########################################################################################
+namespace eval m00nie {
+   namespace eval youtube {
+        package require http
+        package require json
+        package require tls
+        http::register https 443 tls::socket
+        bind pub - !yt m00nie::youtube::search
+        variable version "1.0"
+        variable key "GET-YOUR-OWN"
+        ::http::config -useragent "Mozilla/5.0 (X11; Linux x86_64; rv:29.0) Gecko/20100101 Firefox/29.0"
+
+proc search {nick uhost hand chan text} {
+        putlog "m00nie::youtube::search is running"
+        regsub -all {\s+} $text "%20" text
+        set url "https://www.googleapis.com/youtube/v3/search?part=snippet&fields=items(id(videoId),snippet(title))&key=$m00nie::youtube::key&q=$text"
+        set repeat "3"
+        getids ($nick $chan $url $repeat)
+}
+
+proc getids {nick chan url repeat} {
+        putlog "m00nie::youtube::getids is running"
+        if { [catch {
+                for { set i 1 } { $i <= 5 } { incr i } {                         set rawpage [::http::data [::http::geturl "$url" -timeout 5000]]                         if {[string length rawpage] > 0} { break }
+                }
+                putlog "m00nie::youtube::getids Rawpage length is: [string length $rawpage]"
+                if {[string length $rawpage] == 0} { error "youtube ZERO no data :( or we couldnt connect properly" }
+                set ids [dict get [json::json2dict $rawpage] items]
+                printout ($nick $chan $ids $repeat)
+                } catch] == 1} { putlog "m00nie::youtube failed: $catch"; return "$catch" }\
+                else { return $catch }
+}
+
+proc printout {nick chan ids repeat} {
+        set output "\002\00301,00You\00300,04Tube\003\002 "
+        for {set i 0} {$i < $repeat} {incr i} {
+                putlog "m00nie::youtube::printout is running loop number $i"
+                set id [lindex $ids $i 1 1]
+                set desc [lindex $ids $i 3 1]
+                putlog "m00nie::youtube::printout ID is $id and description is $desc"
+                set yout "https://youtu.be/$id"
+                append output $desc " - " $yout " | "
+        }
+        set output [string range $output 0 end-2]
+        puthelp "PRIVMSG $chan $output"
+}
+}
+}
+putlog "m00nie::youtube $m00nie::youtube::version loaded"
